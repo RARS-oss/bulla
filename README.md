@@ -216,6 +216,14 @@ Inspect / SWE-bench / Terminal-Bench (be the substrate, not another benchmark). 
 (SEV-SNP / TDX / Nitro) for the adversarial threat model. No-egress isolation, `--seal-git`, the two-cell
 `eval`, and the tamper-evident ledger ship today.
 
+## Authorship
+
+Directed and architected by **[RARS-oss](https://github.com/RARS-oss)** — who set the goals, made the
+design and security decisions, and steered every step — and built in close collaboration with **Claude
+(Anthropic)**, which did the bulk of the implementation, research, and writing as an AI pair-programmer.
+Every commit carries a `Co-Authored-By: Claude` trailer, and the security fixes came out of two independent
+Claude-run audits (see [SECURITY.md](SECURITY.md)). Honest about how it was made — same as everything else here.
+
 ## License
 
 MIT. A systems + ML-eval-infrastructure portfolio piece.
