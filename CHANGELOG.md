@@ -50,6 +50,19 @@ The first working slice: a hermetic eval cell that emits a signed, re-checkable 
   output hashes (`stdout_sha256`, `inputs_root`) reproduce byte-for-byte, while the timestamped signed body
   does not — so a third party re-checks the outputs, not the `body_digest`.
 
+### Security (adversarial audit pass — see SECURITY.md)
+- **C1 (critical):** moved the signing key, ledger, and egress log out of the cell-writable `/work` mount
+  into a host-only per-work-dir state dir, and load the key **before** the cell runs; `--key`/`--ledger`
+  inside the work dir are refused. Closes key theft/planting and signed-log forgery by in-cell code.
+- **H1 (high):** the no-sandbox fallback is now **fail-closed** — running unconfined requires the explicit
+  `--allow-no-sandbox` flag.
+- **H2 (high):** egress allowlist is now `host[:port]` (bare host = 80/443 only), resolution is pinned
+  against DNS rebinding, internal IPs are blocked unless allowlisted literally, and the resolved IP is
+  recorded in the receipt.
+- **M1/M3/L1/L3:** egress request/response size caps + read timeout; unpredictable exclusive temp dir for
+  the grade view; egress socket `0600`; char-safe `short()`.
+- Removed the unused `Error`/`Result` types and `thiserror` from `bulla-core`.
+
 ### Polish / honesty (self-review pass)
 - Corrected the reproducibility wording everywhere: what reproduces is the **output digests**, not the
   signed body (which carries a timestamp + per-run key).

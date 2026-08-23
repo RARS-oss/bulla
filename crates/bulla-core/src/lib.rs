@@ -220,8 +220,11 @@ pub struct LoggedCall {
     pub host: String,
     pub port: u16,
     pub path: String,
-    /// Was the host on the allowlist? A denied call is refused and recorded, not performed.
+    /// Was the (host, port) on the allowlist? A denied call is refused and recorded, not performed.
     pub allowed: bool,
+    /// The IP the host actually resolved to (records the true target, so DNS rebinding is visible).
+    #[serde(default)]
+    pub resolved_ip: String,
     pub req_sha256: String,
     pub resp_sha256: String,
     pub resp_bytes: u64,
@@ -235,6 +238,8 @@ pub struct EgressCall {
     pub port: u16,
     pub path: String,
     pub allowed: bool,
+    #[serde(default)]
+    pub resolved_ip: String,
     pub req_sha256: String,
     pub resp_sha256: String,
     pub resp_bytes: u64,
@@ -267,6 +272,7 @@ pub fn egress_summary(allowlist: &[String], calls: &[LoggedCall]) -> EgressSumma
         port: u16,
         path: &'a str,
         allowed: bool,
+        resolved_ip: &'a str,
         req_sha256: &'a str,
         resp_sha256: &'a str,
         resp_bytes: u64,
@@ -281,6 +287,7 @@ pub fn egress_summary(allowlist: &[String], calls: &[LoggedCall]) -> EgressSumma
             port: c.port,
             path: &c.path,
             allowed: c.allowed,
+            resolved_ip: &c.resolved_ip,
             req_sha256: &c.req_sha256,
             resp_sha256: &c.resp_sha256,
             resp_bytes: c.resp_bytes,
@@ -293,6 +300,7 @@ pub fn egress_summary(allowlist: &[String], calls: &[LoggedCall]) -> EgressSumma
             port: c.port,
             path: c.path.clone(),
             allowed: c.allowed,
+            resolved_ip: c.resolved_ip.clone(),
             req_sha256: c.req_sha256.clone(),
             resp_sha256: c.resp_sha256.clone(),
             resp_bytes: c.resp_bytes,
@@ -848,6 +856,7 @@ mod tests {
                 port: 8080,
                 path: "/quote".into(),
                 allowed: true,
+                resolved_ip: "127.0.0.1".into(),
                 req_sha256: sha256_hex(b"GET /quote"),
                 resp_sha256: sha256_hex(b"{}"),
                 resp_bytes: 2,
@@ -857,6 +866,7 @@ mod tests {
                 port: 443,
                 path: "/x".into(),
                 allowed: false,
+                resolved_ip: String::new(),
                 req_sha256: sha256_hex(b"GET /x"),
                 resp_sha256: sha256_hex(b""),
                 resp_bytes: 0,

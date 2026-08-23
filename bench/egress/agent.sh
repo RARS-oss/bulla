@@ -18,6 +18,7 @@ def call(req):
         if not b: break
         data += b
     return data
-print("ALLOWED  ->", call("127.0.0.1 8799 /quote")[:80])
-print("DENIED   ->", call("evil.example 443 /exfiltrate")[:80])
+print("ALLOWED       ->", call("127.0.0.1 8799 /quote")[:80])
+print("DENIED host   ->", call("evil.example 443 /exfiltrate")[:80])
+print("DENIED port   ->", call("127.0.0.1 22 /")[:80])   # allowlisted host, NON-allowlisted port (SSRF probe)
 PY

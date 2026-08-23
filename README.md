@@ -169,11 +169,13 @@ flaky test's attempts into a ledger so a lucky pass can't be reported as pass@1 
 ### Smart egress — scoped network without breaking the seal
 
 An agent that legitimately needs one API (a trading agent must reach the exchange) doesn't have to open
-the network. `bulla run --egress-allow <host>` keeps the cell's **netns empty** (no raw egress) and gives
-it a single mediated channel — a **Unix socket** the broker serves (Unix sockets aren't network-namespaced,
-so a cell with no IP connectivity still reaches a host-side proxy). The broker enforces the allowlist and
-**hashes every request/response into the receipt**; an off-list host is refused and recorded. The run stays
-**SEAL HELD** — capability-based egress, not "network on." (`bash bench/egress/run_experiment.sh`)
+the network. `bulla run --egress-allow <host[:port]>` keeps the cell's **netns empty** (no raw egress) and
+gives it a single mediated channel — a **Unix socket** the broker serves (Unix sockets aren't
+network-namespaced, so a cell with no IP connectivity still reaches a host-side proxy). The broker enforces
+the allowlist **by host and port** (a bare host permits only 80/443), **pins DNS resolution and blocks
+internal IPs** (no SSRF/rebinding), and **hashes every request/response — with the resolved IP — into the
+receipt**; an off-list host *or port* is refused and recorded. The run stays **SEAL HELD** — capability-based
+egress, not "network on." (`bash bench/egress/run_experiment.sh`; threat model in [SECURITY.md](SECURITY.md))
 
 ## Zero-knowledge risk proofs — prove compliance, not the position
 

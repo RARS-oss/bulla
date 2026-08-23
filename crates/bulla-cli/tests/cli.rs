@@ -99,6 +99,30 @@ fn a_tampered_receipt_fails_verification() {
 }
 
 #[test]
+fn a_key_inside_the_work_dir_is_refused() {
+    // Finding C1: trust material must not live in the cell-writable mount.
+    let work = tmpdir();
+    let out = bin()
+        .args(["run", "--work"])
+        .arg(&work)
+        .args(["--key"])
+        .arg(work.join(".bulla/planted.seed"))
+        .args(["--", "sh", "-c", "echo hi"])
+        .output()
+        .expect("run bulla");
+    assert!(
+        !out.status.success(),
+        "a --key inside the work dir must be refused"
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("must not resolve inside the work dir"),
+        "unexpected error: {err}"
+    );
+    fs::remove_dir_all(&work).ok();
+}
+
+#[test]
 fn keygen_prints_a_public_key() {
     let dir = tmpdir();
     let key = dir.join("k.seed");

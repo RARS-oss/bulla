@@ -60,7 +60,8 @@ struct RunArgs {
     /// Where to write the signed receipt (default: <work>/.bulla/receipt.json).
     #[arg(long)]
     out: Option<PathBuf>,
-    /// Ed25519 signing seed file (32 raw/hex bytes). Default: <work>/.bulla/ed25519.seed (created if absent).
+    /// Ed25519 signing seed file (32 raw/hex bytes). Default: a HOST-ONLY per-work-dir state dir
+    /// (never inside /work, so sandboxed code can't steal or plant it). Refused if inside the work dir.
     #[arg(long)]
     key: Option<PathBuf>,
     /// Allow host network into the cell (opt-in; changes the threat model). Default: deny.
@@ -69,6 +70,10 @@ struct RunArgs {
     /// Drop the deterministic profile (ASLR on, inherited env). Default: deterministic.
     #[arg(long)]
     nondeterministic: bool,
+    /// If the sandbox cannot be built, run the command UNCONFINED on the host instead of refusing.
+    /// Off by default (fail-closed): without isolation, bulla will not run untrusted code.
+    #[arg(long)]
+    allow_no_sandbox: bool,
     /// Reduce the work dir's git repo to a single history-free HEAD before the run, so the fix
     /// can't be mined from `.git`. DESTRUCTIVE to `.git` — give bulla a disposable checkout.
     #[arg(long)]
@@ -76,16 +81,16 @@ struct RunArgs {
     /// Wall-clock ceiling in milliseconds.
     #[arg(long, default_value_t = 60_000)]
     wall_ms: u64,
-    /// Append this attempt to a tamper-evident run ledger (default: <work>/.bulla/ledger.jsonl).
+    /// Append this attempt to a tamper-evident run ledger (default: a host-only per-work-dir state dir).
     #[arg(long)]
     ledger: Option<PathBuf>,
     /// Emit a compact machine-readable JSON summary to stdout instead of the human table.
     #[arg(long)]
     json: bool,
-    /// Smart egress: allow the cell to reach this host through the mediated broker socket (repeatable).
-    /// The network namespace stays empty (no raw egress); every call is allowlist-checked and hashed
-    /// into the receipt. Without it, there is no egress at all.
-    #[arg(long = "egress-allow", value_name = "HOST")]
+    /// Smart egress: allow the cell to reach `HOST` or `HOST:PORT` through the mediated broker socket
+    /// (repeatable). A bare host permits only ports 80/443; internal IPs are blocked unless allowlisted
+    /// as a literal address. The netns stays empty (no raw egress); every call is hashed into the receipt.
+    #[arg(long = "egress-allow", value_name = "HOST[:PORT]")]
     egress_allow: Vec<String>,
     /// The command to run, after `--`.
     #[arg(last = true, required = true)]
@@ -106,6 +111,9 @@ struct EvalArgs {
     allow_net: bool,
     #[arg(long)]
     nondeterministic: bool,
+    /// If the sandbox cannot be built, run UNCONFINED on the host instead of refusing (fail-closed default).
+    #[arg(long)]
+    allow_no_sandbox: bool,
     /// Seal the work dir's git history before the solve.
     #[arg(long)]
     seal_git: bool,
@@ -126,7 +134,7 @@ struct EvalArgs {
     /// Shell command for the grade phase (the oracle).
     #[arg(long)]
     grade: String,
-    /// Append this attempt to a tamper-evident run ledger (default: <work>/.bulla/ledger.jsonl).
+    /// Append this attempt to a tamper-evident run ledger (default: a host-only per-work-dir state dir).
     #[arg(long)]
     ledger: Option<PathBuf>,
     /// Emit a compact machine-readable JSON summary to stdout instead of the human table.
@@ -212,6 +220,19 @@ fn cmd_run(a: RunArgs) -> Result<()> {
         bail!("work dir is not a directory: {}", work.display());
     }
 
+    // Trust material (signing key + ledger) MUST live outside the cell-writable /work mount, and the
+    // key MUST be loaded before any untrusted code runs — otherwise the sandboxed process could plant
+    // or steal it (security finding C1). Default them into a host-only per-work-dir state directory.
+    let state = state_dir(&work)?;
+    let key_path = a.key.clone().unwrap_or_else(|| state.join("ed25519.seed"));
+    let ledger_path = a
+        .ledger
+        .clone()
+        .unwrap_or_else(|| state.join("ledger.jsonl"));
+    reject_inside_work(&key_path, &work, "--key")?;
+    reject_inside_work(&ledger_path, &work, "--ledger")?;
+    let seed = load_or_create_seed(&key_path)?; // loaded BEFORE the cell; held only in parent memory
+
     let policy = bc::EvalPolicy {
         network: if a.allow_net {
             bc::NetworkPolicy::Allow
@@ -237,7 +258,7 @@ fn cmd_run(a: RunArgs) -> Result<()> {
     let egress_broker = if policy.egress_allow.is_empty() {
         None
     } else {
-        Some(start_egress_broker(&work, &policy.egress_allow)?)
+        Some(start_egress_broker(&work, &state, &policy.egress_allow)?)
     };
 
     // 3. Run the command in the real hermetic cell.
@@ -247,6 +268,7 @@ fn cmd_run(a: RunArgs) -> Result<()> {
         &policy.network,
         policy.deterministic,
         policy.wall_ms,
+        a.allow_no_sandbox,
     )?;
     let outcome = cell.outcome;
     let applied = cell.applied;
@@ -302,11 +324,7 @@ fn cmd_run(a: RunArgs) -> Result<()> {
     ];
     let (events, chain_head) = bc::seal_chain(&raw_events);
 
-    // 5. Chain this attempt onto the run ledger (records the head *before* this run).
-    let ledger_path = a
-        .ledger
-        .clone()
-        .unwrap_or_else(|| work.join(".bulla/ledger.jsonl"));
+    // 5. Chain this attempt onto the run ledger (host-only path; resolved above).
     let (ledger_prev, ledger_seq) = ledger_head(&ledger_path)?;
     let solve_exit = outcome_sum.exit_code;
 
@@ -331,9 +349,7 @@ fn cmd_run(a: RunArgs) -> Result<()> {
         chain_head,
     };
 
-    // 6. Sign, write the receipt, and append the ledger entry.
-    let key_path = a.key.unwrap_or_else(|| work.join(".bulla/ed25519.seed"));
-    let seed = load_or_create_seed(&key_path)?;
+    // 6. Sign (with the pre-loaded key), write the receipt, and append the ledger entry.
     let signed = bc::sign(body, &seed);
 
     let out_path = a.out.unwrap_or_else(|| work.join(".bulla/receipt.json"));
@@ -372,6 +388,18 @@ fn cmd_eval(a: EvalArgs) -> Result<()> {
     if !work.is_dir() {
         bail!("work dir is not a directory: {}", work.display());
     }
+
+    // Trust material outside the cell-writable mount, key loaded before the cell (finding C1).
+    let state = state_dir(&work)?;
+    let key_path = a.key.clone().unwrap_or_else(|| state.join("ed25519.seed"));
+    let ledger_path = a
+        .ledger
+        .clone()
+        .unwrap_or_else(|| state.join("ledger.jsonl"));
+    reject_inside_work(&key_path, &work, "--key")?;
+    reject_inside_work(&ledger_path, &work, "--ledger")?;
+    let seed = load_or_create_seed(&key_path)?;
+
     let policy = bc::EvalPolicy {
         network: if a.allow_net {
             bc::NetworkPolicy::Allow
@@ -398,6 +426,7 @@ fn cmd_eval(a: EvalArgs) -> Result<()> {
         &policy.network,
         policy.deterministic,
         policy.wall_ms,
+        a.allow_no_sandbox,
     )?;
 
     // Phase 2: build the grade view (trusted grader + only the agent's solution edits), then GRADE
@@ -415,6 +444,7 @@ fn cmd_eval(a: EvalArgs) -> Result<()> {
         &policy.network,
         policy.deterministic,
         policy.wall_ms,
+        a.allow_no_sandbox,
     )?;
 
     let applied = solve.applied.clone();
@@ -483,10 +513,6 @@ fn cmd_eval(a: EvalArgs) -> Result<()> {
         outcome: grade.summary.clone(),
     };
 
-    let ledger_path = a
-        .ledger
-        .clone()
-        .unwrap_or_else(|| work.join(".bulla/ledger.jsonl"));
     let (ledger_prev, ledger_seq) = ledger_head(&ledger_path)?;
     let solve_exit = solve.summary.exit_code;
     let grade_exit = grade.summary.exit_code;
@@ -512,8 +538,6 @@ fn cmd_eval(a: EvalArgs) -> Result<()> {
         chain_head,
     };
 
-    let key_path = a.key.unwrap_or_else(|| work.join(".bulla/ed25519.seed"));
-    let seed = load_or_create_seed(&key_path)?;
     let signed = bc::sign(body, &seed);
     let out_path = a.out.unwrap_or_else(|| work.join(".bulla/receipt.json"));
     if let Some(parent) = out_path.parent() {
@@ -974,6 +998,34 @@ fn map_outcome(o: &hc::Outcome) -> bc::OutcomeSummary {
     }
 }
 
+/// Host-only, per-work-dir state directory for trust material (key, ledger, egress log). NEVER inside
+/// the cell-writable `/work` mount — so sandboxed code can neither read nor forge it.
+fn state_dir(work: &Path) -> Result<PathBuf> {
+    let base = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let tag = bc::sha256_hex(work.to_string_lossy().as_bytes());
+    let dir = base.join(".bulla").join(&tag[..16]);
+    fs::create_dir_all(&dir).with_context(|| format!("creating state dir {}", dir.display()))?;
+    Ok(dir)
+}
+
+/// Refuse a trust-material path that resolves inside the sandbox-writable work dir.
+fn reject_inside_work(p: &Path, work: &Path, flag: &str) -> Result<()> {
+    let target = p.parent().unwrap_or(p);
+    let inside = match (target.canonicalize(), work.canonicalize()) {
+        (Ok(a), Ok(b)) => a.starts_with(&b),
+        _ => p.starts_with(work),
+    };
+    if inside {
+        bail!(
+            "{flag} must not resolve inside the work dir (writable by the sandboxed code): {}",
+            p.display()
+        );
+    }
+    Ok(())
+}
+
 /// Load a 32-byte Ed25519 seed from `path` (raw 32 bytes or 64 hex chars), creating one if absent.
 fn load_or_create_seed(path: &Path) -> Result<[u8; 32]> {
     if path.exists() {
@@ -1074,6 +1126,7 @@ fn run_in_cell(
     network: &bc::NetworkPolicy,
     deterministic: bool,
     wall_ms: u64,
+    allow_no_sandbox: bool,
 ) -> Result<CellRun> {
     let mut spec = hc::Spec::new(argv.to_vec(), work);
     spec.hermetic.no_network = matches!(network, bc::NetworkPolicy::Deny);
@@ -1084,13 +1137,21 @@ fn run_in_cell(
     spec.limits.wall = Duration::from_millis(wall_ms);
     let (outcome, note) = match hc::run(&spec) {
         Ok(o) => (o, None),
+        // Fail-CLOSED (finding H1): if the sandbox can't be built, do NOT silently run the command
+        // unconfined on the host. Only fall through to a direct run when explicitly opted in.
+        Err(e) if !allow_no_sandbox => {
+            bail!(
+                "sandbox unavailable ({e}); refusing to run untrusted code unconfined. \
+                 Re-run with --allow-no-sandbox to run WITHOUT isolation (the receipt will say SEAL BROKEN)."
+            );
+        }
         Err(e) => {
             eprintln!(
-                "[bulla] sandbox unavailable ({e}); falling back to --no-sandbox (seal will fail)"
+                "[bulla] --allow-no-sandbox: sandbox unavailable ({e}); running UNCONFINED on the host (SEAL BROKEN)"
             );
             (
                 hc::run_direct(&spec)?,
-                Some(format!("sandbox unavailable: {e}")),
+                Some(format!("ran WITHOUT sandbox (--allow-no-sandbox): {e}")),
             )
         }
     };
@@ -1175,11 +1236,12 @@ fn build_grade_view(
     work: &Path,
     solution: &[String],
 ) -> Result<PathBuf> {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static C: AtomicU64 = AtomicU64::new(0);
-    let n = C.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("bulla-grade-{}-{}", std::process::id(), n));
-    fs::create_dir_all(&dir)?;
+    // Unpredictable name + exclusive create (finding M3): `create_dir` fails if the path already
+    // exists, so a local attacker cannot pre-plant a symlink to redirect the trusted-snapshot writes.
+    let rnd = bc::seed_to_hex(&bc::generate_seed());
+    let dir =
+        std::env::temp_dir().join(format!("bulla-grade-{}-{}", std::process::id(), &rnd[..24]));
+    fs::create_dir(&dir).with_context(|| format!("creating grade view {}", dir.display()))?;
     for (rel, bytes) in trusted {
         let p = dir.join(rel);
         if let Some(parent) = p.parent() {
@@ -1320,10 +1382,11 @@ fn cmd_attest(a: AttestArgs) -> Result<()> {
 // ---- smart egress: a mediated broker reachable only via a Unix socket in /work -------------------
 
 /// Spawn the egress broker as a SEPARATE process (keeps this process single-threaded for the cell's
-/// clone) and wait until it is listening. Returns the child + the log path.
-fn start_egress_broker(work: &Path, allow: &[String]) -> Result<(Child, PathBuf)> {
+/// clone) and wait until it is listening. The socket lives in `/work` (the cell must reach it), but the
+/// call **log lives in the host-only state dir** so the sandboxed code cannot forge it (finding C1).
+fn start_egress_broker(work: &Path, state: &Path, allow: &[String]) -> Result<(Child, PathBuf)> {
     let sock = work.join(".bulla/egress.sock");
-    let log = work.join(".bulla/egress.log");
+    let log = state.join("egress.log");
     if let Some(p) = sock.parent() {
         fs::create_dir_all(p).ok();
     }
@@ -1379,24 +1442,31 @@ fn cmd_egress_broker(a: BrokerArgs) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&a.sock, fs::Permissions::from_mode(0o666)).ok();
+        // 0600, not world-writable (finding L1): the in-cell client shares the invoking uid.
+        fs::set_permissions(&a.sock, fs::Permissions::from_mode(0o600)).ok();
     }
     let mut logf = fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&a.log)?;
 
+    const REQ_CAP: u64 = 8 * 1024; // bound the request line (finding M1)
+    const RESP_CAP: u64 = 4 * 1024 * 1024; // bound the response held in host RAM (finding M1)
+
     for conn in listener.incoming() {
         let mut stream = match conn {
             Ok(s) => s,
             Err(_) => continue,
         };
+        // Read timeout so a client that never sends a newline can't stall the broker (M1).
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
         let mut line = String::new();
         {
-            let mut r = BufReader::new(match stream.try_clone() {
+            let clone = match stream.try_clone() {
                 Ok(c) => c,
                 Err(_) => continue,
-            });
+            };
+            let mut r = BufReader::new(clone.take(REQ_CAP));
             if r.read_line(&mut line).is_err() {
                 continue;
             }
@@ -1410,22 +1480,33 @@ fn cmd_egress_broker(a: BrokerArgs) -> Result<()> {
         let host = parts[0].to_string();
         let port: u16 = parts[1].parse().unwrap_or(0);
         let path = parts[2].to_string();
-        let allowed = a.allow.iter().any(|h| h == &host);
+        // Allowlist matches (host, port) — a bare host permits only 80/443 (finding H2).
+        let allowed = allowlist_ok(&a.allow, &host, port);
         let req_sha256 = bc::sha256_hex(format!("{host} {port} {path}").as_bytes());
 
-        let (resp_sha256, resp_bytes) = if !allowed {
+        let (resolved_ip, resp_sha256, resp_bytes) = if !allowed {
             let _ = stream.write_all(b"DENIED not on allowlist\n");
-            (bc::sha256_hex(b""), 0u64)
+            (String::new(), bc::sha256_hex(b""), 0u64)
         } else {
-            match http_get(&host, port, &path) {
-                Ok(bytes) => {
-                    let _ = stream.write_all(&bytes);
-                    (bc::sha256_hex(&bytes), bytes.len() as u64)
-                }
+            match resolve_and_validate(&host, port) {
                 Err(e) => {
-                    let _ = stream.write_all(format!("ERROR {e}\n").as_bytes());
-                    (bc::sha256_hex(b""), 0u64)
+                    let _ = stream.write_all(format!("DENIED {e}\n").as_bytes());
+                    (String::new(), bc::sha256_hex(b""), 0u64)
                 }
+                Ok(addr) => match http_get(addr, &host, &path, RESP_CAP) {
+                    Ok(bytes) => {
+                        let _ = stream.write_all(&bytes);
+                        (
+                            addr.ip().to_string(),
+                            bc::sha256_hex(&bytes),
+                            bytes.len() as u64,
+                        )
+                    }
+                    Err(e) => {
+                        let _ = stream.write_all(format!("ERROR {e}\n").as_bytes());
+                        (addr.ip().to_string(), bc::sha256_hex(b""), 0u64)
+                    }
+                },
             }
         };
         let call = bc::LoggedCall {
@@ -1433,6 +1514,7 @@ fn cmd_egress_broker(a: BrokerArgs) -> Result<()> {
             port,
             path,
             allowed,
+            resolved_ip,
             req_sha256,
             resp_sha256,
             resp_bytes,
@@ -1445,14 +1527,62 @@ fn cmd_egress_broker(a: BrokerArgs) -> Result<()> {
     Ok(())
 }
 
-/// A dependency-free HTTP/1.0 GET (the demo broker talks to a local mock; real TLS would add rustls).
-fn http_get(host: &str, port: u16, path: &str) -> std::result::Result<Vec<u8>, String> {
+/// True if `(host, port)` is permitted. An allowlist entry `host:port` pins that exact port; a bare
+/// `host` permits only 80/443. Port is attacker-controlled, so it must be checked (finding H2).
+fn allowlist_ok(allow: &[String], host: &str, port: u16) -> bool {
+    allow.iter().any(|entry| match entry.split_once(':') {
+        Some((h, p)) => h == host && p.parse::<u16>() == Ok(port),
+        None => entry == host && (port == 80 || port == 443),
+    })
+}
+
+fn is_internal(ip: &std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v) => {
+            v.is_loopback()
+                || v.is_private()
+                || v.is_link_local()
+                || v.is_unspecified()
+                || v.is_broadcast()
+        }
+        IpAddr::V6(v) => {
+            v.is_loopback()
+                || v.is_unspecified()
+                || (v.segments()[0] & 0xfe00) == 0xfc00 // unique-local fc00::/7
+                || (v.segments()[0] & 0xffc0) == 0xfe80 // link-local fe80::/10
+        }
+    }
+}
+
+/// Resolve `host:port` ONCE (pinning the IP to defeat DNS rebinding) and reject internal targets
+/// unless the client asked for that literal IP (finding H2).
+fn resolve_and_validate(
+    host: &str,
+    port: u16,
+) -> std::result::Result<std::net::SocketAddr, String> {
     use std::net::ToSocketAddrs;
     let addr = format!("{host}:{port}")
         .to_socket_addrs()
         .map_err(|e| e.to_string())?
         .next()
         .ok_or_else(|| "no address resolved".to_string())?;
+    if is_internal(&addr.ip()) && host.parse::<std::net::IpAddr>().ok() != Some(addr.ip()) {
+        return Err(format!(
+            "blocked internal target {} (possible DNS rebinding)",
+            addr.ip()
+        ));
+    }
+    Ok(addr)
+}
+
+/// A dependency-free HTTP/1.0 GET to an ALREADY-RESOLVED, pinned address, with a bounded response.
+fn http_get(
+    addr: std::net::SocketAddr,
+    host: &str,
+    path: &str,
+    max_bytes: u64,
+) -> std::result::Result<Vec<u8>, String> {
     let mut stream =
         TcpStream::connect_timeout(&addr, Duration::from_secs(3)).map_err(|e| e.to_string())?;
     stream
@@ -1463,7 +1593,10 @@ fn http_get(host: &str, port: u16, path: &str) -> std::result::Result<Vec<u8>, S
         .write_all(req.as_bytes())
         .map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
-    stream.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    stream
+        .take(max_bytes)
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
     Ok(buf)
 }
 
@@ -1474,10 +1607,11 @@ fn now_epoch() -> u64 {
         .unwrap_or(0)
 }
 fn short(h: &str) -> String {
-    if h.len() > 12 {
-        format!("{}…", &h[..12])
+    let head: String = h.chars().take(12).collect();
+    if head.len() < h.len() {
+        format!("{head}…")
     } else {
-        h.to_string()
+        head
     }
 }
 fn yn(b: bool) -> &'static str {

@@ -10,13 +10,13 @@ BIN="${1:-$(command -v bulla || echo "$HOME/.cache/bulla-target/debug/bulla")}"
 [ -x "$BIN" ] || { echo "bulla binary not found: $BIN"; exit 1; }
 
 W="$(mktemp -d)"; cp "$HERE/flaky_test.py" "$W/"
-L="$W/.bulla/ledger.jsonl"
-trap 'rm -rf "$W"' EXIT
+LDIR="$(mktemp -d)"; L="$LDIR/ledger.jsonl"   # ledger lives OUTSIDE the cell-writable work dir
+trap 'rm -rf "$W" "$LDIR"' EXIT
 
 N=7
 echo "Running the same flaky test $N times under bulla (shared ledger)…"
 for i in $(seq 1 "$N"); do
-  "$BIN" run --work "$W" --out "$W/.bulla/receipt.json" -- python3 flaky_test.py >/dev/null 2>&1
+  "$BIN" run --work "$W" --ledger "$L" --out "$W/.bulla/receipt.json" -- python3 flaky_test.py >/dev/null 2>&1
 done
 
 echo

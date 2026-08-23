@@ -17,9 +17,9 @@ trap 'kill "$SRV" 2>/dev/null; rm -rf "$UP" "$W"' EXIT
 sleep 0.6
 
 echo "------------------------------------------------------------"
-echo "A) SMART EGRESS  (--egress-allow 127.0.0.1 : only the exchange host reachable)"
+echo "A) SMART EGRESS  (--egress-allow 127.0.0.1:8799 : only the exchange host reachable)"
 echo "------------------------------------------------------------"
-"$BIN" run --work "$W" --egress-allow 127.0.0.1 --out "$W/.bulla/r.json" -- sh agent.sh
+"$BIN" run --work "$W" --egress-allow 127.0.0.1:8799 --out "$W/.bulla/r.json" -- sh agent.sh
 echo "   -> verify (egress is in the signed receipt):"
 "$BIN" verify "$W/.bulla/r.json" | grep -E "seal held|egress|ALLOW|DENY|net_ns" | sed 's/^/     /'
 
