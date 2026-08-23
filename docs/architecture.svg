@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" width="1200" height="440" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#12221f"/><stop offset="1" stop-color="#0d1719"/></linearGradient></defs>
+<rect x="1" y="1" width="1198" height="438" rx="18" fill="url(#bg)" stroke="#24363b" stroke-width="1.5"/>
+<text x="40" y="46" fill="#2bc4b2" font-size="15" font-weight="700" letter-spacing="3">HOW A BULLA IS MADE — POLICY · TWO CELLS · SIGNED RECEIPT</text>
+
+<!-- policy -->
+<rect x="40" y="80" width="200" height="300" rx="10" fill="#15252a" stroke="#2a4147"/>
+<text x="60" y="108" fill="#63e0cf" font-size="14" font-weight="700">EvalPolicy</text>
+<text x="60" y="140" fill="#9fb4ba" font-size="13" font-family="monospace">network = Deny</text>
+<text x="60" y="164" fill="#9fb4ba" font-size="13" font-family="monospace">deterministic</text>
+<text x="60" y="188" fill="#9fb4ba" font-size="13" font-family="monospace">git_hygiene</text>
+<text x="60" y="212" fill="#9fb4ba" font-size="13" font-family="monospace">wall_ms</text>
+<text x="60" y="252" fill="#7f9aa0" font-size="12">the contract the</text>
+<text x="60" y="270" fill="#7f9aa0" font-size="12">receipt commits to;</text>
+<text x="60" y="288" fill="#7f9aa0" font-size="12">its sha256 is</text>
+<text x="60" y="306" fill="#7f9aa0" font-size="12" font-family="monospace">policy_digest</text>
+
+<!-- cells -->
+<rect x="300" y="70" width="360" height="150" rx="10" fill="#16262a" stroke="#2a4147"/>
+<text x="320" y="98" fill="#eaf3f2" font-size="14" font-weight="700">SOLVE CELL</text>
+<text x="320" y="122" fill="#9fb4ba" font-size="12.5">the agent edits /work freely</text>
+<text x="320" y="150" fill="#8fd6c9" font-size="11.5" font-family="monospace">clone: user·pid·mount·net·uts·ipc·cgroup ns</text>
+<text x="320" y="170" fill="#8fd6c9" font-size="11.5" font-family="monospace">pivot_root · seccomp · no_new_privs · no ASLR</text>
+<text x="320" y="196" fill="#c19a6b" font-size="11.5" font-family="monospace">net = empty namespace → no egress (structural)</text>
+
+<rect x="300" y="250" width="360" height="130" rx="10" fill="#16262a" stroke="#2bc4b2" stroke-opacity="0.55"/>
+<text x="320" y="278" fill="#2bc4b2" font-size="14" font-weight="700">GRADE CELL  (bulla eval)</text>
+<text x="320" y="302" fill="#9fb4ba" font-size="12.5">grades a restored view:</text>
+<text x="320" y="324" fill="#8fd6c9" font-size="11.5" font-family="monospace">trusted grader  +  only the agent's --solution edits</text>
+<text x="320" y="346" fill="#9fb4ba" font-size="11.5">a poisoned oracle can't reach the scorer</text>
+<text x="320" y="366" fill="#7f9aa0" font-size="11">injected conftest.py / overwritten test → dropped</text>
+
+<line x1="240" y1="150" x2="300" y2="145" stroke="#2bc4b2" stroke-width="2"/>
+<polygon points="300,145 290,141 290,149" fill="#2bc4b2"/>
+
+<!-- receipt -->
+<rect x="720" y="70" width="230" height="310" rx="10" fill="#15252a" stroke="#2a4147"/>
+<text x="740" y="98" fill="#63e0cf" font-size="14" font-weight="700">the bulla (receipt)</text>
+<text x="740" y="128" fill="#9fb4ba" font-size="12" font-family="monospace">inputs.root  sha256</text>
+<text x="740" y="150" fill="#9fb4ba" font-size="12" font-family="monospace">applied ns / seccomp</text>
+<text x="740" y="172" fill="#9fb4ba" font-size="12" font-family="monospace">outcome  stdout·err sha</text>
+<text x="740" y="194" fill="#9fb4ba" font-size="12" font-family="monospace">grade  isolated? digest</text>
+<text x="740" y="216" fill="#9fb4ba" font-size="12" font-family="monospace">git_sealed  HEAD</text>
+<text x="740" y="238" fill="#9fb4ba" font-size="12" font-family="monospace">ledger_prev  (chain)</text>
+<text x="740" y="260" fill="#9fb4ba" font-size="12" font-family="monospace">event hash-chain</text>
+<line x1="740" y1="278" x2="930" y2="278" stroke="#2a4147"/>
+<text x="740" y="302" fill="#eaf3f2" font-size="12.5" font-family="monospace">seal_ok = f(above)</text>
+<text x="740" y="336" fill="#2bc4b2" font-size="13" font-weight="700" font-family="monospace">Ed25519 sign</text>
+<text x="740" y="358" fill="#7f9aa0" font-size="11">over the canonical body</text>
+
+<line x1="660" y1="150" x2="720" y2="150" stroke="#2bc4b2" stroke-width="2"/>
+<polygon points="720,150 710,146 710,154" fill="#2bc4b2"/>
+<line x1="660" y1="300" x2="700" y2="300" stroke="#2bc4b2" stroke-width="2"/>
+<line x1="700" y1="300" x2="700" y2="215" stroke="#2bc4b2" stroke-width="2"/>
+<line x1="700" y1="215" x2="720" y2="200" stroke="#2bc4b2" stroke-width="2"/>
+<polygon points="720,200 709,199 714,208" fill="#2bc4b2"/>
+
+<!-- verify -->
+<rect x="1000" y="130" width="170" height="180" rx="10" fill="#16262a" stroke="#2bc4b2" stroke-opacity="0.55"/>
+<text x="1018" y="158" fill="#2bc4b2" font-size="14" font-weight="700">bulla verify</text>
+<text x="1018" y="186" fill="#8fd6c9" font-size="12" font-family="monospace">signature ok</text>
+<text x="1018" y="208" fill="#8fd6c9" font-size="12" font-family="monospace">digest ok</text>
+<text x="1018" y="230" fill="#8fd6c9" font-size="12" font-family="monospace">chain ok</text>
+<text x="1018" y="258" fill="#eaf3f2" font-size="12" font-family="monospace">seal held?</text>
+<text x="1018" y="288" fill="#7f9aa0" font-size="10.5">offline · no re-run ·</text>
+<text x="1018" y="302" fill="#7f9aa0" font-size="10.5">no trust in the runner</text>
+<line x1="950" y1="200" x2="1000" y2="200" stroke="#2bc4b2" stroke-width="2"/>
+<polygon points="1000,200 990,196 990,204" fill="#2bc4b2"/>
+</svg>

@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --workspace
+
+      - name: Build bulla
+        run: cargo build --release -p bulla-cli
+
+      # Ubuntu 24.04 hosted runners restrict unprivileged user namespaces via AppArmor, which makes
+      # the cell's mount setup fail. Lift it so CI exercises the *real* sandbox. `|| true` keeps this
+      # a no-op on kernels without the knob.
+      - name: Permit unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+
+      - name: Smoke — run + verify + tamper detection
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash scripts/demo.sh "$BIN" | tee /tmp/demo.txt
+          grep -Eq "SEAL HELD" /tmp/demo.txt
+          grep -Eq "signature   FAIL" /tmp/demo.txt   # forgery is caught
+
+      - name: Vector — network egress (bench/retrieval)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/retrieval/run_experiment.sh "$BIN" | tee /tmp/r.txt
+          grep -Eq "leaky \(net on\).*test=PASS.*seal=BROKEN" /tmp/r.txt
+          grep -Eq "sealed \(net off\).*test=FAIL.*seal=HELD" /tmp/r.txt
+
+      - name: Vector — git-history mining (bench/gitmine)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/gitmine/run_experiment.sh "$BIN" | tee /tmp/g.txt
+          grep -Eq "raw git.*test=PASS.*seal=BROKEN" /tmp/g.txt
+          grep -Eq "sealed git.*test=FAIL.*seal=HELD" /tmp/g.txt
+
+      - name: Vector — oracle tamper (bench/oracle)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/oracle/run_experiment.sh "$BIN" | tee /tmp/o.txt
+          grep -Eq "same-cell.*grade=PASS.*seal=BROKEN" /tmp/o.txt
+          grep -Eq "grade-cell.*grade=FAIL.*seal=HELD" /tmp/o.txt
+
+      - name: Vector — metric gaming (bench/flaky ledger)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/flaky/run_experiment.sh "$BIN" | tee /tmp/f.txt
+          grep -Eq "chain +ok" /tmp/f.txt
+          grep -Eq "chain +BROKEN" /tmp/f.txt
+
+      - name: Real agent solve (bench/agent-solve)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/agent-solve/run.sh "$BIN" | tee /tmp/a.txt
+          grep -Eq "baseline grade_exit=1" /tmp/a.txt   # empty solve fails: the grader is real
+          grep -Eq "agent-solve grade_exit=0" /tmp/a.txt # the from-source fix passes under the seal
+
+      - name: Smart egress (bench/egress mediated broker)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/egress/run_experiment.sh "$BIN" | tee /tmp/eg.txt
+          grep -Eq "egress +mediated" /tmp/eg.txt                  # egress is in the receipt
+          grep -Eq "ALLOW 127.0.0.1:8799" /tmp/eg.txt              # allowlisted host reached
+          grep -Eq "DENY +evil.example" /tmp/eg.txt                # off-list host refused
+          grep -Eq "seal held +YES" /tmp/eg.txt                    # still hermetic (empty netns)
+
+      - name: Determinism / reproducibility (bench/determinism)
+        run: |
+          BIN="$PWD/target/release/bulla"
+          bash bench/determinism/run_experiment.sh "$BIN" | tee /tmp/det.txt
+          grep -Eq "stdout_sha256 identical : True" /tmp/det.txt
+          grep -Eq "inputs_root   identical : True" /tmp/det.txt
+          grep -Eq "body_digest   identical : False" /tmp/det.txt
+
+      - name: Zero-knowledge risk proof (bench/zk, real Bulletproofs)
+        run: |
+          out="$(cargo run -q -p bulla-zk --example risk_proof)"
+          echo "$out"
+          echo "$out" | grep -q "within risk cap = true"
+          echo "$out" | grep -q "over-cap order verifies = false"
+          echo "$out" | grep -q "tampered proof verifies = false"
+
+      - name: MCP adapter wrapper (end-to-end vs the real binary)
+        run: |
+          export BULLA_BIN="$PWD/target/release/bulla"
+          W="$(mktemp -d)"
+          BULLA_WORK="$W" python3 - "$W" <<'PY'
+          import sys, os
+          sys.path.insert(0, "adapters/mcp")
+          import bulla_mcp as m
+          r = m.bulla_run("echo attested; exit 0", cwd=sys.argv[1], timeout=30)
+          assert r["seal_ok"] is True and r["exit_code"] == 0, r
+          v = m.bulla_verify(r["receipt"])
+          assert v.get("intact") is True and v.get("sig_ok") is True, v
+          print("MCP wrapper ok:", r["rendered"])
+          PY

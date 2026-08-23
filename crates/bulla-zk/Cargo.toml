@@ -1,0 +1,22 @@
+[package]
+name = "bulla-zk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "bulla-zk: a real zero-knowledge range proof that a (secret) order/position is within a committed risk limit"
+keywords = ["zero-knowledge", "bulletproofs", "range-proof", "trading", "attestation"]
+categories = ["cryptography"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+bulletproofs.workspace = true
+curve25519-dalek-ng.workspace = true
+merlin.workspace = true
+rand.workspace = true
+
+[[example]]
+name = "risk_proof"
+path = "examples/risk_proof.rs"

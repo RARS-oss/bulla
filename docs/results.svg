@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#12221f"/><stop offset="1" stop-color="#0d1719"/></linearGradient></defs>
+<rect x="1" y="1" width="1198" height="378" rx="18" fill="url(#bg)" stroke="#24363b" stroke-width="1.5"/>
+<text x="40" y="44" fill="#2bc4b2" font-size="16" font-weight="700" letter-spacing="2">SEALING THE HARNESS FLIPS THE CHEAT'S PASS TO AN HONEST FAIL — SIGNED BOTH WAYS</text>
+<text x="40" y="68" fill="#7f9aa0" font-size="13">same task · same solver · same binary · identical input manifest — only the seal differs (bench/)</text>
+
+<!-- column headers -->
+<text x="470" y="104" fill="#c15b5b" font-size="13" font-weight="700" letter-spacing="1">LEAKY HARNESS</text>
+<text x="820" y="104" fill="#2bc4b2" font-size="13" font-weight="700" letter-spacing="1">bulla SEAL</text>
+
+<!-- rows -->
+<g font-family="system-ui,sans-serif">
+<!-- row template repeated -->
+<g transform="translate(0,120)">
+<text x="40" y="20" fill="#eaf3f2" font-size="14" font-weight="600">network egress</text>
+<text x="40" y="40" fill="#7f9aa0" font-size="11.5">Cursor · 57%</text>
+<rect x="440" y="2" width="300" height="42" rx="7" fill="#211417" stroke="#7d3b3b" stroke-opacity="0.6"/>
+<text x="456" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">test PASS</text>
+<text x="456" y="37" fill="#c15b5b" font-size="12.5" font-family="monospace">seal BROKEN</text>
+<rect x="790" y="2" width="300" height="42" rx="7" fill="#14231f" stroke="#2bc4b2" stroke-opacity="0.5"/>
+<text x="806" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">test FAIL</text>
+<text x="806" y="37" fill="#2bc4b2" font-size="12.5" font-family="monospace">seal HELD</text>
+</g>
+<g transform="translate(0,180)">
+<text x="40" y="20" fill="#eaf3f2" font-size="14" font-weight="600">git-history mining</text>
+<text x="40" y="40" fill="#7f9aa0" font-size="11.5">Cursor · 9%</text>
+<rect x="440" y="2" width="300" height="42" rx="7" fill="#211417" stroke="#7d3b3b" stroke-opacity="0.6"/>
+<text x="456" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">test PASS</text>
+<text x="456" y="37" fill="#c15b5b" font-size="12.5" font-family="monospace">seal BROKEN</text>
+<rect x="790" y="2" width="300" height="42" rx="7" fill="#14231f" stroke="#2bc4b2" stroke-opacity="0.5"/>
+<text x="806" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">test FAIL  (--seal-git)</text>
+<text x="806" y="37" fill="#2bc4b2" font-size="12.5" font-family="monospace">seal HELD</text>
+</g>
+<g transform="translate(0,240)">
+<text x="40" y="20" fill="#eaf3f2" font-size="14" font-weight="600">oracle tamper</text>
+<text x="40" y="40" fill="#7f9aa0" font-size="11.5">Berkeley RDI · 100%</text>
+<rect x="440" y="2" width="300" height="42" rx="7" fill="#211417" stroke="#7d3b3b" stroke-opacity="0.6"/>
+<text x="456" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">grade PASS  (same cell)</text>
+<text x="456" y="37" fill="#c15b5b" font-size="12.5" font-family="monospace">seal BROKEN</text>
+<rect x="790" y="2" width="300" height="42" rx="7" fill="#14231f" stroke="#2bc4b2" stroke-opacity="0.5"/>
+<text x="806" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">grade FAIL  (grade cell)</text>
+<text x="806" y="37" fill="#2bc4b2" font-size="12.5" font-family="monospace">seal HELD</text>
+</g>
+<g transform="translate(0,300)">
+<text x="40" y="20" fill="#eaf3f2" font-size="14" font-weight="600">metric gaming</text>
+<text x="40" y="40" fill="#7f9aa0" font-size="11.5">flaky pass@1</text>
+<rect x="440" y="2" width="300" height="42" rx="7" fill="#211417" stroke="#7d3b3b" stroke-opacity="0.6"/>
+<text x="456" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">drop the failures</text>
+<text x="456" y="37" fill="#c15b5b" font-size="12.5" font-family="monospace">ledger BROKEN</text>
+<rect x="790" y="2" width="300" height="42" rx="7" fill="#14231f" stroke="#2bc4b2" stroke-opacity="0.5"/>
+<text x="806" y="20" fill="#eaf3f2" font-size="12.5" font-family="monospace">honest pass rate on record</text>
+<text x="806" y="37" fill="#2bc4b2" font-size="12.5" font-family="monospace">bulla log</text>
+</g>
+</g>
+</svg>

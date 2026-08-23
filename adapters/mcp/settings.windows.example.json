@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "bulla": {
+      "command": "python",
+      "args": ["C:\path\to\bulla\adapters\mcp\bulla_mcp.py"],
+      "env": { "BULLA_WSL": "Ubuntu:/home/you/.cargo/bin/bulla" }
+    }
+  }
+}

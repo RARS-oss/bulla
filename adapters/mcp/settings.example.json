@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "bulla": {
+      "command": "python",
+      "args": ["/abs/path/to/bulla/adapters/mcp/bulla_mcp.py"],
+      "env": { "BULLA_BIN": "/abs/path/to/bulla" }
+    }
+  }
+}

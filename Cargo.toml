@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hermit-core",
+    "crates/bulla-core",
+    "crates/bulla-cli",
+    "crates/bulla-zk",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/RARS-oss/bulla"
+description = "bulla: a hermetic eval sandbox that emits a signed, re-checkable receipt that the isolation seal held"
+
+[workspace.dependencies]
+# hermit-core is vendored from RARS-oss/sbx (the isolation mechanism); reused here as the seal's cell.
+hermit-core = { path = "crates/hermit-core", version = "0.1.0" }
+bulla-core = { path = "crates/bulla-core", version = "0.1.0" }
+
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+nix = { version = "0.29", features = ["sched", "mount", "process", "signal", "user", "fs", "resource", "hostname", "poll", "time"] }
+libc = "0.2"
+seccompiler = "0.5"
+clap = { version = "4", features = ["derive"] }
+
+# receipt / crypto
+sha2 = "0.10"
+hex = "0.4"
+ed25519-dalek = "2"
+getrandom = "0.2"
+
+# zero-knowledge (bulla-zk): a real Bulletproofs range proof
+bulletproofs = "4"
+curve25519-dalek-ng = "4"
+merlin = "3"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"

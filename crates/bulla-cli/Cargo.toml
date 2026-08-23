@@ -1,0 +1,21 @@
+[package]
+name = "bulla-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "bulla: run a command in a hermetic cell and emit a signed, re-checkable receipt that the seal held"
+
+[[bin]]
+name = "bulla"
+path = "src/main.rs"
+
+[dependencies]
+bulla-core.workspace = true
+hermit-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

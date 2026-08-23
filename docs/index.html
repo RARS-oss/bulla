@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bulla — a verifiable seal for agent evaluation</title>
+<meta name="description" content="A hermetic, no-root eval cell that emits a cryptographically signed receipt that the isolation seal held.">
+<style>
+  :root{
+    --bg:#0d1719; --bg2:#12221f; --card:#15252a; --line:#24363b;
+    --ink:#eaf3f2; --mut:#9fb4ba; --dim:#7f9aa0; --acc:#2bc4b2; --acc2:#63e0cf; --bad:#c15b5b;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.6}
+  a{color:var(--acc2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  header{padding:48px 0 8px}
+  header img{width:100%;height:auto;border-radius:16px}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:18px 0}
+  .badge{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mut);
+    border:1px solid var(--line);background:var(--bg2);border-radius:20px;padding:4px 12px}
+  .lede{text-align:center;font-size:20px;color:var(--mut);max-width:760px;margin:16px auto 6px}
+  .lede b{color:var(--ink)}
+  .nav{text-align:center;margin:22px 0 8px}
+  .nav a{margin:0 10px;font-weight:600}
+  section{padding:34px 0;border-top:1px solid var(--line)}
+  h2{font-size:26px;margin:0 0 6px;letter-spacing:-.3px}
+  h2 .k{color:var(--acc)}
+  .sub{color:var(--dim);margin:0 0 20px}
+  figure{margin:22px 0}
+  figure img{width:100%;height:auto;border-radius:14px;border:1px solid var(--line)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .stat .n{font-size:26px;font-weight:800;color:var(--acc2)}
+  .stat .l{color:var(--mut);font-size:14px;margin-top:4px}
+  .stat .s{color:var(--dim);font-size:12px;margin-top:8px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--acc);font-weight:600}
+  td .ok{color:var(--acc)} td .no{color:var(--bad)}
+  pre{background:#0b1416;border:1px solid var(--line);border-radius:12px;padding:16px;overflow:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#cfe6e1}
+  pre .c{color:var(--dim)} pre .g{color:var(--acc2)} pre .r{color:var(--bad)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.cols{grid-template-columns:1fr}}
+  blockquote{border-left:3px solid var(--acc);margin:16px 0;padding:6px 16px;color:var(--mut);
+    background:var(--bg2);border-radius:0 10px 10px 0}
+  footer{padding:40px 0 60px;color:var(--dim);text-align:center;font-size:14px;border-top:1px solid var(--line)}
+  .pill{display:inline-block;font-family:ui-monospace,monospace;font-size:12px;color:var(--acc);
+    border:1px solid var(--line);border-radius:6px;padding:2px 8px;margin:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="banner.svg" alt="bulla — a hermetic eval cell that emits a signed receipt the seal held">
+  <div class="badges">
+    <span class="badge">Rust 2021</span>
+    <span class="badge">no root</span>
+    <span class="badge">Ed25519-signed receipt</span>
+    <span class="badge">7 tests · clippy clean</span>
+    <span class="badge">MIT</span>
+  </div>
+  <p class="lede"><b>A benchmark score is a claim. <code>bulla</code> makes it a receipt.</b>
+    A hermetic, no-root eval cell that emits a cryptographically signed, re-checkable record that the
+    isolation <i>seal</i> held — so a number can't quietly be produced with the network on, the grader
+    edited, the fix mined from <code>.git</code>, or a lucky run cherry-picked.</p>
+  <p class="nav">
+    <a href="REPORT.md">Technical report</a>
+    <a href="https://github.com/RARS-oss/bulla">GitHub</a>
+    <a href="https://github.com/RARS-oss/bulla/tree/main/bench">The four reproductions</a>
+    <a href="research/">Research</a>
+  </p>
+</header>
+
+<section id="hole">
+  <h2>The hole</h2>
+  <p class="sub">Trust in agent benchmarks broke in 2026 — and the fixes all aimed at the tasks, not the harness.</p>
+  <div class="grid">
+    <div class="stat"><div class="n">59.4%</div><div class="l">of hard SWE-bench Verified tasks had defective tests</div><div class="s">OpenAI stopped reporting it, Feb 2026 — "scores reflect training exposure"</div></div>
+    <div class="stat"><div class="n">63%</div><div class="l">of a top model's "solutions" were retrieved, not derived</div><div class="s">Cursor, Jun 2026 — sealing git + net dropped it 87.1% → 73.0%</div></div>
+    <div class="stat"><div class="n">100%</div><div class="l">scored by a poisoned grader without solving anything</div><div class="s">Berkeley RDI — "Docker isolates the harness cell, not the oracle"</div></div>
+    <div class="stat"><div class="n">96.7%</div><div class="l">of Terminal-Bench traces read a hidden <code>/tests</code> dir</div><div class="s">DebugML — one leaked answer file moved a submission 1st → 14th</div></div>
+  </div>
+  <p class="sub" style="margin-top:18px">The leaky, unsigned harness is a security surface worth <b style="color:var(--ink)">10–20 points</b>. <span class="k" style="color:var(--acc)">bulla</span> closes it — and makes the closing verifiable.</p>
+</section>
+
+<section id="what">
+  <h2>How a <span class="k">bulla</span> is made</h2>
+  <p class="sub">Policy → two isolated cells → a signed, content-addressed receipt → offline verification.</p>
+  <figure><img src="architecture.svg" alt="policy, solve cell and grade cell, signed receipt, verify"></figure>
+  <p class="sub">No egress is <b style="color:var(--ink)">structural, not asserted</b>: a sealed run gets a fresh empty
+    network namespace — like an AWS Nitro enclave, there is no interface to leave by. The receipt records the
+    kernel fact, signs it, and anyone can re-check it offline.</p>
+</section>
+
+<section id="vectors">
+  <h2>The four harness leaks — closed &amp; signed</h2>
+  <p class="sub">Same task, same solver, same binary, identical input manifest — only the seal differs.</p>
+  <figure><img src="results.svg" alt="four vectors, leaky PASS/seal BROKEN vs bulla FAIL/seal HELD"></figure>
+  <table>
+    <tr><th>Vector (source)</th><th>Leak</th><th>bulla defense</th><th>Result</th></tr>
+    <tr><td>network egress · Cursor 57%</td><td>fetch the fix over the net</td><td>no-egress net namespace</td><td><span class="no">leaky PASS / BROKEN</span> → <span class="ok">sealed FAIL / HELD</span></td></tr>
+    <tr><td>git-history · Cursor 9%</td><td><code>git show</code> the fix commit</td><td><code>--seal-git</code> prunes to one HEAD</td><td><span class="no">raw PASS / BROKEN</span> → <span class="ok">sealed FAIL / HELD</span></td></tr>
+    <tr><td>oracle-tamper · RDI 100%</td><td>overwrite the test / conftest</td><td><code>bulla eval</code> separate grade cell</td><td><span class="no">same-cell PASS / BROKEN</span> → <span class="ok">grade-cell FAIL / HELD</span></td></tr>
+    <tr><td>metric-gaming</td><td>keep a lucky run, drop the rest</td><td>tamper-evident ledger (<code>bulla log</code>)</td><td><span class="ok">honest pass rate</span>; dropped attempt → <span class="no">chain BROKEN</span></td></tr>
+  </table>
+  <p class="sub" style="margin-top:16px"><b style="color:var(--ink)">Out of scope, stated plainly:</b> training-data contamination and weak tests are not sandbox problems — bulla makes grading <i>trustworthy</i>, not the tests <i>strong</i>.</p>
+</section>
+
+<section id="use">
+  <h2>See it in 30 seconds</h2>
+  <div class="cols">
+    <div>
+      <pre><span class="c"># run a command in a sealed cell → signed receipt</span>
+bulla run --work ./task -- sh -c 'run-the-tests'
+
+[bulla] <span class="g">SEAL HELD</span>  exit=code:1 wall=25ms
+  cell: net_ns=true pivot_root=true seccomp=true …
+  signed by 64e8281d…  ->  ./task/.bulla/receipt.json</pre>
+    </div>
+    <div>
+      <pre><span class="c"># anyone verifies it offline</span>
+bulla verify ./task/.bulla/receipt.json
+
+  signature   <span class="g">ok</span>    body digest <span class="g">ok</span>
+  event chain <span class="g">ok</span>
+  intact      <span class="g">YES</span>   seal held  <span class="g">YES</span>
+<span class="c"># forge one field → </span>signature <span class="r">FAIL</span></pre>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:14px">
+    <span class="pill">bulla run</span><span class="pill">bulla eval</span><span class="pill">bulla verify</span><span class="pill">bulla log</span><span class="pill">bulla keygen</span>
+  </p>
+</section>
+
+<section id="boundary">
+  <h2>The honest boundary</h2>
+  <blockquote>A signed receipt proves the seal held to anyone who can (a) verify the signature chain and
+    (b) reproduce the run to the recorded <b>output digests</b> (the deterministic <code>stdout_sha256</code> /
+    <code>inputs_root</code> — not the timestamped signed body). It does <b>not</b> defend against a prover who forges the
+    <code>bulla</code> binary <i>and</i> controls the host — for that adversary, add a hardware-TEE anchor.
+    Everything short of that, a bulla covers with no special hardware and no root.</blockquote>
+  <p class="sub">Tamper-evidence + provenance + reproducibility — decisive where reputation is on the line
+    (labs reporting to auditors and leaderboards, your own CI). Not a hardened jail for a hostile prover on
+    their own silicon; that is the optional TEE tier. Stating the boundary is the point, not a footnote.</p>
+</section>
+
+</div>
+<footer>
+  <div class="wrap">
+    MIT licensed · a systems + ML-eval-infrastructure portfolio piece by
+    <a href="https://github.com/RARS-oss">RARS-oss</a> · built on the <a href="https://github.com/RARS-oss/sbx">sbx</a> hermetic core.<br>
+    Every cited number lives in <a href="research/">research/</a>; the full write-up is <a href="REPORT.md">REPORT.md</a>.
+  </div>
+</footer>
+</body>
+</html>
