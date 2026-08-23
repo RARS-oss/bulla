@@ -34,9 +34,13 @@ the `attest` simulation (clearly labelled, non-authoritative).
 | M3 | Medium | predictable, symlink-unsafe temp dir for the grade view | unpredictable name + exclusive `create_dir` (fails if the path exists) |
 | L1 | Low | egress socket was `0666` | `0600` (the in-cell client shares the invoking uid) |
 | L3 | Low | `short()` sliced by byte index (latent panic on a multibyte boundary) | char-safe truncation |
+| N1 | Medium | the receipt write followed a symlink an in-cell process could plant at `--out` in `/work`, allowing arbitrary host-file overwrite (e.g. corrupting the host-only ledger / signing key = DoS) | receipt defaults to the host-only state dir; the path is unlinked before writing (a symlink is removed, not followed), in both `run` and `eval` |
+| N2 | Medium | `is_internal` (egress SSRF filter) missed IPv4-mapped IPv6 (`::ffff:169.254.169.254`) and CGNAT `100.64/10`, re-opening SSRF via a DNS name | classify mapped addresses on their v4 form; add CGNAT |
 
-Each fix is covered by a test or a `bench/` assertion (e.g. `--key` inside the work dir is refused;
-an allowlisted host on a non-allowlisted port is denied).
+A second, independent re-audit verified all of the above and confirmed the crypto verification, canonical
+serialization, fail-closed fallback, and egress pinning are sound. Each fix is covered by a test or a
+`bench/` assertion (e.g. `--key` inside the work dir is refused; an allowlisted host on a non-allowlisted
+port is denied; `is_internal` blocks mapped-IPv6 / CGNAT).
 
 **Known / deferred (tracked, lower priority):**
 
@@ -50,6 +54,12 @@ an allowlisted host on a non-allowlisted port is denied).
   `GIT_CONFIG_NOSYSTEM=1` + empty `HOME` + `core.hooksPath=/dev/null`, or inside a cell.
 - **Ledger tail-truncation** — a backward hash chain detects interior deletion but not truncation of the
   most recent entries; that needs an external witness (planned Rekor/transparency-log anchor).
+- **N3 (low)** — the vendored `hermit-core` scratch dir uses a predictable name + `create_dir_all`
+  (the CLI's grade-view temp dir was hardened; the vendored one is a follow-up, and needs a local
+  attacker on shared `/tmp` — outside the primary threat model).
+- **N4 (low)** — the egress broker has no *write* timeout to the in-cell client (self-inflicted stall;
+  the broker is killed after the run) and copies a bare `\r` in a path into the (already host/port-pinned)
+  request line. Planned: write timeout + reject control chars in the path.
 
 ## Reporting
 

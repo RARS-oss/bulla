@@ -57,7 +57,8 @@ struct RunArgs {
     /// Work dir bound read-write at /work inside the cell; also the cwd and the input set.
     #[arg(long, default_value = ".")]
     work: PathBuf,
-    /// Where to write the signed receipt (default: <work>/.bulla/receipt.json).
+    /// Where to write the signed receipt (default: a host-only per-work-dir state dir; a path planted
+    /// as a symlink is unlinked before writing).
     #[arg(long)]
     out: Option<PathBuf>,
     /// Ed25519 signing seed file (32 raw/hex bytes). Default: a HOST-ONLY per-work-dir state dir
@@ -352,10 +353,13 @@ fn cmd_run(a: RunArgs) -> Result<()> {
     // 6. Sign (with the pre-loaded key), write the receipt, and append the ledger entry.
     let signed = bc::sign(body, &seed);
 
-    let out_path = a.out.unwrap_or_else(|| work.join(".bulla/receipt.json"));
+    // Default the receipt to the host-only state dir; unlink any pre-existing path first so in-cell
+    // code can't plant a symlink at --out to redirect the write onto a host file (finding N1).
+    let out_path = a.out.unwrap_or_else(|| state.join("receipt.json"));
     if let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent).ok();
     }
+    fs::remove_file(&out_path).ok();
     fs::write(&out_path, serde_json::to_vec_pretty(&signed)?)
         .with_context(|| format!("writing receipt to {}", out_path.display()))?;
     ledger_append(
@@ -539,10 +543,12 @@ fn cmd_eval(a: EvalArgs) -> Result<()> {
     };
 
     let signed = bc::sign(body, &seed);
-    let out_path = a.out.unwrap_or_else(|| work.join(".bulla/receipt.json"));
+    // Host-only default + unlink-before-write to defeat a symlink planted at --out (finding N1).
+    let out_path = a.out.unwrap_or_else(|| state.join("receipt.json"));
     if let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent).ok();
     }
+    fs::remove_file(&out_path).ok();
     fs::write(&out_path, serde_json::to_vec_pretty(&signed)?)
         .with_context(|| format!("writing receipt to {}", out_path.display()))?;
     ledger_append(
@@ -1538,15 +1544,22 @@ fn allowlist_ok(allow: &[String], host: &str, port: u16) -> bool {
 
 fn is_internal(ip: &std::net::IpAddr) -> bool {
     use std::net::IpAddr;
+    fn v4_internal(v: &std::net::Ipv4Addr) -> bool {
+        let o = v.octets();
+        v.is_loopback()
+            || v.is_private()
+            || v.is_link_local()
+            || v.is_unspecified()
+            || v.is_broadcast()
+            || (o[0] == 100 && (o[1] & 0xc0) == 0x40) // CGNAT 100.64.0.0/10
+    }
     match ip {
-        IpAddr::V4(v) => {
-            v.is_loopback()
-                || v.is_private()
-                || v.is_link_local()
-                || v.is_unspecified()
-                || v.is_broadcast()
-        }
+        IpAddr::V4(v) => v4_internal(v),
         IpAddr::V6(v) => {
+            // Classify IPv4-mapped addresses (e.g. ::ffff:169.254.169.254) on their v4 form (N2).
+            if let Some(v4) = v.to_ipv4_mapped() {
+                return v4_internal(&v4);
+            }
             v.is_loopback()
                 || v.is_unspecified()
                 || (v.segments()[0] & 0xfe00) == 0xfc00 // unique-local fc00::/7
@@ -1626,5 +1639,56 @@ fn exit_str(o: &bc::OutcomeSummary) -> String {
         "code" => format!("code:{}", o.exit_code.unwrap_or(-1)),
         "signal" => format!("signal:{}", o.signal.clone().unwrap_or_default()),
         other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{allowlist_ok, is_internal};
+    use std::net::IpAddr;
+
+    #[test]
+    fn allowlist_enforces_port() {
+        let allow = vec!["api.example.com".to_string(), "127.0.0.1:8799".to_string()];
+        assert!(allowlist_ok(&allow, "api.example.com", 443)); // bare host -> 443 ok
+        assert!(allowlist_ok(&allow, "api.example.com", 80)); // bare host -> 80 ok
+        assert!(!allowlist_ok(&allow, "api.example.com", 8080)); // bare host -> other port denied
+        assert!(allowlist_ok(&allow, "127.0.0.1", 8799)); // pinned port ok
+        assert!(!allowlist_ok(&allow, "127.0.0.1", 22)); // off-port denied (H2)
+        assert!(!allowlist_ok(&allow, "evil.example", 443)); // off-host denied
+    }
+
+    #[test]
+    fn is_internal_blocks_internal_and_mapped_and_cgnat() {
+        let internal = [
+            "127.0.0.1",
+            "10.0.0.5",
+            "192.168.1.1",
+            "169.254.169.254", // cloud metadata
+            "100.64.0.1",      // CGNAT
+            "::1",
+            "::ffff:169.254.169.254", // IPv4-mapped metadata (N2)
+            "::ffff:127.0.0.1",       // IPv4-mapped loopback (N2)
+            "fe80::1",                // link-local
+            "fc00::1",                // unique-local
+        ];
+        for s in internal {
+            assert!(
+                is_internal(&s.parse::<IpAddr>().unwrap()),
+                "{s} must be internal"
+            );
+        }
+        let external = [
+            "1.1.1.1",
+            "8.8.8.8",
+            "93.184.216.34",
+            "2606:4700:4700::1111",
+        ];
+        for s in external {
+            assert!(
+                !is_internal(&s.parse::<IpAddr>().unwrap()),
+                "{s} must be external"
+            );
+        }
     }
 }
