@@ -6,3 +6,8 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# local secrets
+.env
+.env.*
+!.env.example
